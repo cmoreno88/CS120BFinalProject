@@ -36,15 +36,17 @@ task ScrollTask;
 //moving user position task
 task MovePositionTask;
 //check for game end task
-task GameEndTask;
+task EndGameTask;
 //Array of tasks
-task *tasks[TASK_SIZE] = {&StartGameTask, &MovePositionTask, & GameEndTask,
+task *tasks[TASK_SIZE] = {&StartGameTask, &MovePositionTask, &EndGameTask,
                             &ScrollTask};
 //END OF TASKS 
 
 //BEGIN SHARED VARIABLES
 //check if game has begun
 unsigned char begin;
+
+unsigned char start;
 
 //////////////////////////////////////////////
 #define HIGHSCOREADDR 10
@@ -74,18 +76,19 @@ enum GameEndStates {GameEnd_START, GameEnd_WAIT, GameEnd_CHECK};
 
 
 #define MESSAGE_SIZE 30
-const unsigned char TopArray[MESSAGE_SIZE+1] = "     *       *       *     "
-                                                "   ";
-const unsigned char BottomArray[MESSAGE_SIZE+1] = "       *        *      "
-                                                "  *    ";
+const unsigned char TopArray[MESSAGE_SIZE+1]    = "     *       *    *  *     *  ";
+const unsigned char BottomArray[MESSAGE_SIZE+1] = "  *    *  *     *        *    ";
 
 int ScrollSM(int state)
 {
     unsigned char loopIndex;
     static unsigned char messageIndex;
-    static const unsigned char endMessage[] = "GAME OVER";
-    static const unsigned char newHigh[] = "NEW HIGH SCORE!";
-    static const unsigned char yourScore[]= "Your Score: ";
+    static const unsigned char endMessage[] = "ENDGAME";		//7 spaces
+    static const unsigned char newHigh[] = "NEW HIGH SCORE!";	//15 spaces
+    static const unsigned char yourScore[] = "Your Score: ";	//12 spaces
+    static const unsigned char currHigh[] = " HS = ";			//6 spaces 
+    static const unsigned char startScreen[] = "Press Start";
+    
     switch(state)//transitions
     {
         case START:
@@ -112,10 +115,22 @@ int ScrollSM(int state)
             {
                 state = SCROLL;
             }
-            else
+            else if(begin == 0x00 && start == 0x01)
+            {
+                state = INIT;
+                start = 0x00;
+            }
+            else{
+				state = GAME_OVER;
+			}
+            /*if(begin == 0x01)
+            {
+                state = SCROLL;
+            }
+            else 
             {
                 state = GAME_OVER;
-            }
+            }*/
             break;
             
         case GAME_OVER:
@@ -134,27 +149,8 @@ int ScrollSM(int state)
             messageIndex = 17;
             strncpy(topMessage, TopArray, 16);	//copy characters from TopArray into topmessage array
             strncpy(bottomMessage, BottomArray, 16);
-            for(loopIndex = 0; loopIndex < 16; ++loopIndex)
-            {
-
-                if((loopIndex+1) == position){
-					LCD_Cursor(loopIndex+1);
-					LCD_WriteData(FIRSTPLAYER);
-				}
-				else{
-					LCD_Cursor(loopIndex+1);
-					LCD_WriteData(topMessage[loopIndex]);
-				}
-				if((loopIndex+17) == position){
-					LCD_Cursor(loopIndex+17);
-					LCD_WriteData(FIRSTPLAYER);
-				}
-				else{
-					LCD_Cursor(loopIndex+17);
-					LCD_WriteData(bottomMessage[loopIndex]);
-				}
-					
-            }
+            LCD_ClearScreen();
+            LCD_DisplayString(1,startScreen);
             LCD_Cursor(position);
             break;
             
@@ -199,7 +195,6 @@ int ScrollSM(int state)
 //////////////////////////////////FINAL PROJECT//////////////////////////////////////////////////////
         case GAME_OVER:
             LCD_ClearScreen();
-         //   LCD_DisplayString(1, endMessage); "NEW HIGH SCORE!"
 			if(points > highScore){
 				highScore = points;
 				eeprom_update_byte((uint8_t*)HIGHSCOREADDR,points);
@@ -213,8 +208,17 @@ int ScrollSM(int state)
 				ones = highScore % 10;
 				LCD_WriteData('0'+ones);
 			}
-			else{//14 to print "your score: "
-				LCD_DisplayString(1,endMessage);
+			else{//////////////////////////////////////////////////////
+				LCD_DisplayString(1,endMessage);	//Game over message
+				LCD_DisplayString(8,currHigh);		//current highscore message
+				LCD_Cursor(14);
+				tens = highScore / 10;
+				if(tens <= 9){
+					LCD_WriteData('0'+tens);
+				}
+				LCD_Cursor(15);
+				ones = highScore % 10;
+				LCD_WriteData('0'+ones);
 				LCD_DisplayString(17, yourScore);
 				LCD_Cursor(31);
 				tens = points / 10;
@@ -311,6 +315,7 @@ int StartGameSM(int state)
             break;
             
         case reset:
+			start = 0x01;
 			break;
 			
         default:
@@ -496,10 +501,10 @@ int main(void) {
     MovePositionTask.elapsedTime = 50;
     MovePositionTask.TickFct = &MovePositionSM;
 
-    GameEndTask.state = GameEnd_START;
-    GameEndTask.period = 100;
-    GameEndTask.elapsedTime = 100;
-    GameEndTask.TickFct = &GameEndSM;
+    EndGameTask.state = GameEnd_START;
+    EndGameTask.period = 100;
+    EndGameTask.elapsedTime = 100;
+    EndGameTask.TickFct = &GameEndSM;
     while (1)
     {
 	
