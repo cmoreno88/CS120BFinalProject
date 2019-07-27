@@ -1,8 +1,16 @@
 /*	Author: Christopher Moreno
- *  Partner(s) Name: Alex Ku
+ *  Partner(s) Name: N/A
  *	Lab Section: A21
- *	Assignment: Lab 11  Exercise 5
- *	Exercise Description: 
+ *	Assignment: Final Project
+ *	Exercise Description: LCD Side Scroller Game
+ * 	The Objective of the game is to avoid the '*' to earn points.
+ * 	There are 4 input buttons wired on A[3:0]
+ *  The inputs control player movement, game start, and game restart
+ * 	The LCD screen is wired through the shift register which is connected
+ * 	to the ATMEGA1284 microcontroller using C[2:0] and D[7:6]
+ * 	A highscore is stored using functions from the <avr/eeprom.h> library.
+ *  The ATMEGA 1284 is programmed using the AVRDUDE utility.
+ *  
  *  
  *
  *	I acknowledge all content contained herein, excluding template or example
@@ -14,65 +22,44 @@
 #ifdef _SIMULATE_
 #include "simAVRHeader.h"
 #endif
-#include "keypad.h"
 #include "scheduler.h"
-#include "mtimer.h"
+#include "timer.h"
 #include "io.h"
 #include "custChar.h"
 
-
-
-//THE TASKS
-//number of tasks
-#define TASK_SIZE 4
-
-const unsigned long tasksPeriod = 50;
-//number of tasks
-const unsigned char tasksSize = TASK_SIZE;
-//the starting of the game task
-task StartGameTask;
-//the srolling task;
-task ScrollTask;
-//moving user position task
-task MovePositionTask;
-//check for game end task
-task EndGameTask;
-//Array of tasks
-task *tasks[TASK_SIZE] = {&StartGameTask, &MovePositionTask, &EndGameTask,
-                            &ScrollTask};
-//END OF TASKS 
-
-//BEGIN SHARED VARIABLES
-//check if game has begun
-unsigned char begin;
-
-unsigned char start;
-
-//////////////////////////////////////////////
+#define BUTTONS (~PINA & 0x0F)		//Input buttons
 #define HIGHSCOREADDR 10
-unsigned char highScore;
-unsigned char points = 0;
-unsigned char tens = 0;
-unsigned char ones = 0;
 
+//tasks
+task StartGameTask;
+task ScrollTask;
+task MovePositionTask;
+task EndGameTask;					//endgame task
+task *tasks[] = { &StartGameTask, &MovePositionTask, &EndGameTask, &ScrollTask };	//tasks Array
+const unsigned short numTasks = sizeof(tasks)/sizeof(task*);//TASK_SIZE;
+const unsigned long tasksPeriod = 50;	//
 
-
-//all button inputs
-#define GET_BUTTONS (~PINA & 0x0F)
-//#define GET_BUTTONS (~PINA & 0x07)
-//player position
-unsigned char position;
-//message to print at top and bottom respectively
-unsigned char topMessage[17];
-unsigned char bottomMessage[17];
-//END SHARED VARIABLES
+//Global Variables
+unsigned char highScore;			//hold copy of score from eeprom address
+unsigned char points = 0;			//hold player points
+unsigned char tens = 0;				//variable to calculate tens position of points
+unsigned char ones = 0;				//variable to calculate ones position of points
+unsigned char begin;				//Begin Flag
+unsigned char start;				//Restart Flag
+unsigned char position;				//Player Position variable
+unsigned char topMessage[17];		//LCD top row
+unsigned char bottomMessage[17];	//LCD bottom row
 
 //Enumeration of States for all 4 tasks  
 enum ScrollState { START, WAIT, INIT, SCROLL, GAME_OVER };
 enum StartGameState { StartGame_START, StartGame_INIT,StartGame_WAIT, StartGame_PRESS, reset };
-enum MovePositionState{ MovePosition_START, MovePosition_INIT, MovePosition_WAIT, MovePosition_PRESS_UP, 
+enum MovePositionState{
+	MovePosition_START, 
+	MovePosition_INIT, 
+	MovePosition_WAIT, 
+	MovePosition_PRESS_UP, 
 	MovePosition_PRESS_DOWN };
-enum GameEndStates {GameEnd_START, GameEnd_WAIT, GameEnd_CHECK};                      
+enum EndGameStates { EndGame_START, EndGame_WAIT, EndGame_CHECK };                      
 
 
 #define MESSAGE_SIZE 30
@@ -89,7 +76,7 @@ int ScrollSM(int state)
     static const unsigned char currHigh[] = " HS = ";			//6 spaces 
     static const unsigned char startScreen[] = "Press Start";
     
-    switch(state)//transitions
+    switch(state)//State Transitions
     {
         case START:
             state = INIT;
@@ -123,14 +110,6 @@ int ScrollSM(int state)
             else{
 				state = GAME_OVER;
 			}
-            /*if(begin == 0x01)
-            {
-                state = SCROLL;
-            }
-            else 
-            {
-                state = GAME_OVER;
-            }*/
             break;
             
         case GAME_OVER:
@@ -141,7 +120,7 @@ int ScrollSM(int state)
             state = INIT;
             break;
     }
-    switch(state)//actions
+    switch(state)//State Actions
     {
         case START:
             break;
@@ -244,10 +223,8 @@ int ScrollSM(int state)
 //start game SM
 int StartGameSM(int state)
 {
-    //getting button press
-    unsigned char buttons = GET_BUTTONS;
-    //transitions
-    switch(state)
+    unsigned char buttons = BUTTONS;	//Read button input
+    switch(state)	//State Transitions
     {
         case StartGame_START:
             state = StartGame_INIT;
@@ -277,7 +254,7 @@ int StartGameSM(int state)
             else
             {
                 state = StartGame_WAIT;
-                begin = 0x01;			//starts the game
+                begin = 0x01;			//set start game flag
             }
             break;
          case reset:
@@ -289,7 +266,7 @@ int StartGameSM(int state)
             break;
     }
 
-    switch(state)///////actions////////
+    switch(state)//State Actions
     {
         case StartGame_START:
             break;
@@ -324,18 +301,19 @@ int StartGameSM(int state)
     return state;
 }
 
-//move position SM
 int MovePositionSM(int state)
 {
-    unsigned char buttons = GET_BUTTONS;
-    switch(state)    //transitions
+    unsigned char buttons = BUTTONS;
+    switch(state)    //State Transitions
     {
          case MovePosition_START:
              state = MovePosition_INIT;
              break;
+             
          case MovePosition_INIT:
              state = MovePosition_WAIT;
              break;
+             
          case MovePosition_WAIT:
              if(buttons == 0x02 && begin == 0x01)
              {
@@ -350,6 +328,7 @@ int MovePositionSM(int state)
                  state = MovePosition_WAIT;
              }
              break;
+             
          case MovePosition_PRESS_UP:
              if(buttons == 0x00)
              {
@@ -360,6 +339,7 @@ int MovePositionSM(int state)
                  state = MovePosition_PRESS_UP;
              }
              break;
+             
          case MovePosition_PRESS_DOWN:
              if(buttons == 0x00)
              {
@@ -370,121 +350,104 @@ int MovePositionSM(int state)
                  state = MovePosition_PRESS_DOWN;
              }
              break;
+             
          default:
              state = MovePosition_WAIT;
              break;
     }
     
-    switch(state)    //actions
+    switch(state)    //State Actions
     {
          case MovePosition_START:
              break;
+             
          case MovePosition_INIT:
              position = 1;				//sets the player position to the 1st row 1st column initially
              break;
+             
          case MovePosition_WAIT:
              break;
+             
          case MovePosition_PRESS_UP:
              position = 1;				//sets the player position to the 1st row 1st column
              break;
+             
          case MovePosition_PRESS_DOWN:
              position = 17;				//sets the player position to the 2nd row 1st column
              break;
+             
          default:
              break;
     }
     return state;
 }
 
-//game end sm
-int GameEndSM(int state)
+int EndGameSM(int state)
 {
-    switch(state)    //transitions
+    switch(state)    //State Transitions
     {
-        case GameEnd_START:
-            state = GameEnd_WAIT;
+        case EndGame_START:
+            state = EndGame_WAIT;
             break;
-        case GameEnd_WAIT:
+            
+        case EndGame_WAIT:
             if(begin == 0x00)
             {
-                state = GameEnd_WAIT;
+                state = EndGame_WAIT;
             }
             else
             {
-                state = GameEnd_CHECK;
+                state = EndGame_CHECK;
             }
             break;
-        case GameEnd_CHECK:
+            
+        case EndGame_CHECK:
             if((position == 1 && topMessage[0] == '*') ||
                 (position == 17 && bottomMessage[0] == '*'))
             {
                 begin = 0x00;
-                state = GameEnd_WAIT;
+                state = EndGame_WAIT;
             }
             else if((topMessage[0] == '*') || (bottomMessage[0] == '*'))
             {
-				//begin == 0x01;
 				points++;
-				state = GameEnd_WAIT;
+				state = EndGame_WAIT;
 			}            
 			else
             {
-                state = GameEnd_CHECK;
+                state = EndGame_CHECK;
             }
             break;
+            
         default:
             break;
     }
 
-    switch(state)    //actions
+    switch(state)    //State Actions
     {
-        case GameEnd_START:
+        case EndGame_START:
             break;
-        case GameEnd_WAIT:
+            
+        case EndGame_WAIT:
             break;
-        case GameEnd_CHECK:
+            
+        case EndGame_CHECK:
             break;
+            
         default:
             break;
     }
     return state;
 }
 
-//change timer flag when one period is complete
-void TimerISR()
-{
-    unsigned char i;
-    for(i = 0; i < tasksSize; ++i)
-    {
-        //if task is ready to exexute
-        if(tasks[i]->elapsedTime >= tasks[i]->period)
-        {
-            //execute tick function and update state
-            tasks[i]->state = tasks[i]->TickFct(tasks[i]->state);
-            //reset elasped time
-            tasks[i]->elapsedTime = 0;
-        }
-        //update elasped time
-        tasks[i]->elapsedTime += tasksPeriod;
-    }
-}
-
 int main(void) {
-    //inputs
-    DDRA = 0x00; PORTA = 0xFF;
-    //outputs
-    //output to port b
-    DDRB = 0xFF; PORTB = 0x00;
-    DDRD = 0xFF; PORTD = 0x00; // LCD control lines
-    //initialize LCD displays
-    LCD_init();
+    DDRA = 0x00; PORTA = 0xFF;  //set PORTA for input
+    DDRD = 0xFF; PORTD = 0x00;  // LCD control lines
+    LCD_init();					//initialize LCD displays
     /////////////////////////////////////////////////////////////////FP////////////////////
-    WriteCust(pattern1,FIRSTPLAYER);
-//
-    //initialize timer
-    TimerSet(tasksPeriod);
-    //turn on timer
-    TimerOn();
+    WriteCust(pattern1,FIRSTPLAYER);	//creates custom playable character
+    TimerSet(tasksPeriod);	//Initializes timer
+    TimerOn();	//turns on timer
     //initialize tasks
     ScrollTask.state = START;
     ScrollTask.period = 200;
@@ -501,14 +464,22 @@ int main(void) {
     MovePositionTask.elapsedTime = 50;
     MovePositionTask.TickFct = &MovePositionSM;
 
-    EndGameTask.state = GameEnd_START;
+    EndGameTask.state = EndGame_START;
     EndGameTask.period = 100;
     EndGameTask.elapsedTime = 100;
-    EndGameTask.TickFct = &GameEndSM;
+    EndGameTask.TickFct = &EndGameSM;
     while (1)
     {
-	
-
-    }
-    return 0;
+		unsigned char i;
+		for(i = 0; i < numTasks; ++i){
+        if(tasks[i]->elapsedTime >= tasks[i]->period){
+            tasks[i]->state = tasks[i]->TickFct(tasks[i]->state);
+            tasks[i]->elapsedTime = 0;
+		}
+		tasks[i]->elapsedTime += tasksPeriod;
+		}
+		while(!TimerFlag);
+		TimerFlag = 0;
+	}
+	return 0;
 }

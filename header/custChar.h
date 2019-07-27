@@ -6,7 +6,7 @@
 
 
 unsigned char pattern1 [] = { 0x0E, 0x0E, 0x04, 0x04, 0x1F, 0x04, 0x0A, 0x0A };	//Address 0
-/*
+/*May have to use the function from this header
 void WriteCust(unsigned char *pattern, const char location){
 	unsigned char i;
 	if(location < 8)
@@ -16,7 +16,4 @@ void WriteCust(unsigned char *pattern, const char location){
 			LCD_WriteData(pattern[i]);
 		}
 }*/
-	
-	
-	
 #endif

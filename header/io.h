@@ -2,14 +2,6 @@
 #define __io_h__
 #include <avr/interrupt.h>
 #include <stdio.h>
-
-void LCD_init();
-void LCD_ClearScreen(void);
-void LCD_WriteCommand (unsigned char Command);
-void LCD_Cursor (unsigned char column);
-void LCD_DisplayString(unsigned char column ,const unsigned char *string);
-void delay_ms(int miliSec);
-
 #include <avr/io.h>
 #include "shift.h"
 
@@ -19,6 +11,7 @@ void delay_ms(int miliSec);
           
 /*-------------------------------------------------------------------------*/
 
+//Changed port assignments for shift register use
 //#define DATA_BUS PORTC	// port connected to pins 7-14 of LCD display
 #define CONTROL_BUS PORTD	// port connected to pins 4 and 6 of LCD disp.
 #define RS 6				// pin number of uC connected to pin 4 of LCD disp. register select
@@ -32,7 +25,6 @@ void LCD_ClearScreen(void) {
 
 ////////////////////Created for Final Project//////////////////////////////////////
 void WriteCust(unsigned char *pattern, unsigned char location){
-	//unsigned char i;
 	if(location < 8)
 	{
 		LCD_WriteCommand (0x40 + (location * 8));
@@ -50,7 +42,7 @@ void LCD_init(void) {
 	delay_ms(100);
 	LCD_WriteCommand(0x38);
 	LCD_WriteCommand(0x06);
-	LCD_WriteCommand(0x0C);//LCD_WriteCommand(0x0f);
+	LCD_WriteCommand(0x0C);//LCD_WriteCommand(0x0f); Changed to stop cursor blinking
 	LCD_WriteCommand(0x01);
 	delay_ms(10);						 
 }

@@ -3,33 +3,26 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-//This Header is used for outputting to an HC595 shift register.
-//This can be modified to work with other shift registers.
+/*
+ * File created using Interfacing Shift Register w/AVR Tutorial from:
+ * https://embedds.com/interfacing-shift-register-with-avr/
+ */
 
-//definitions-----------------------
-//#define OUTPUT_PORT PORTB   //port to output to shift register
-//#define OUTPUT_DDR DDRB
-//#define DS_POS PB0          //position of the data pin(DS)
-//#define SH_CP_POS PB1       //position of the shift clock(SH_CP) {SRCLK}
-//#define ST_CP_POS PB2       //position of the store clock(ST_CP) {RCLK}
-//----------------------------------
-
-//definitions-----------------------
 #define OUTPUT_PORT PORTC   //port to output to shift register
 #define OUTPUT_DDR DDRC
-#define DS_POS PC0          //position of the data pin(DS)
-#define SH_CP_POS PC1       //position of the shift clock(SH_CP) {SRCLK}
-#define ST_CP_POS PC2       //position of the store clock(ST_CP) {RCLK}
-//----------------------------------
+#define DS_POS PC0          //data pin(DS) the 4 and 6 pins from the LCD
+#define SH_CP_POS PC1       //shift clock(SH_CP) {SRCLK}
+#define ST_CP_POS PC2       //store clock(ST_CP) {RCLK}
+// change data (DS)lines
+#define ShiftDataHigh() (OUTPUT_PORT|=(1<<DS_POS))
+#define ShiftDataLow() (OUTPUT_PORT&=(~(1<<DS_POS)))
 
 void shiftInit()
 {
    //Make the Data(DS), Shift clock (SH_CP), Store Clock (ST_CP) lines output
    OUTPUT_DDR|=((1<<SH_CP_POS)|(1<<ST_CP_POS)|(1<<DS_POS));
 }
-// change data (DS)lines
-#define ShiftDataHigh() (OUTPUT_PORT|=(1<<DS_POS))
-#define ShiftDataLow() (OUTPUT_PORT&=(~(1<<DS_POS)))
+
 //Sends a clock pulse on SH_CP line
 void shiftPulse()
 {
@@ -37,34 +30,20 @@ void shiftPulse()
    OUTPUT_PORT|=(1<<SH_CP_POS);//set shift clock to HIGH
    OUTPUT_PORT&=(~(1<<SH_CP_POS));//set shift clock to LOW
 }
+
 //Sends a clock pulse on ST_CP line
 void shiftLatch()
 {
    //Pulse the Store Clock
-   OUTPUT_PORT|=(1<<ST_CP_POS);//set store clock HIGH
+   OUTPUT_PORT|=(1<<ST_CP_POS);//set RCLK HIGH
    _delay_loop_1(1);
-   OUTPUT_PORT&=(~(1<<ST_CP_POS));//set store clock LOW
+   OUTPUT_PORT&=(~(1<<ST_CP_POS));//set RCLK LOW
    _delay_loop_1(1);
 }
-/*
- * Main function that writes a single byte
- * to the output shift register
- *
- * Arguments:
- *      data: a single byte of data to be written to the shift register
- *
- * Returns:
- *      NONE
- *
- * Description:
- *      The byte of data is serially transferred to the shift register
- *      and then latched. The byte is the available on the outputs of 
- *      the shift register[7:0] IC
-*/
+
 void shiftWrite(uint8_t data)
 {
-    //send each of the 8 bits serially
-    //in the order of Most Significant Bit(MSB)
+    //send each of the 8 bits serially Most Significant Bit(MSB)
    for(uint8_t i=0;i<8;i++)
    {
       //Output the data on DS line according to the
@@ -83,13 +62,11 @@ void shiftWrite(uint8_t data)
       data=data<<1;  //Now bring next bit at MSB position
    }
    //Now all 8 bits have been transferred to shift register
-   //Move them to output latch 
+   //Move them to output latch at one
    shiftLatch();
 }
-/*
-Simple Delay function approx 0.5 seconds
-used when there is no timer implementation
-*/
+
+//Simple Delay function approx 0.5 seconds
 void Wait()
 {
    for(uint8_t i=0;i<50;i++)
@@ -97,4 +74,4 @@ void Wait()
       _delay_loop_2(0);
    }
 }
-#endif //_SHIFT_REGISTER_1_H_
+#endif
